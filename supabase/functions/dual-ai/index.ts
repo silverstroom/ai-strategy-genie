@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,9 +41,29 @@ serve(async (req) => {
 
   try {
     const { prompt, step, clientInfo, openaiKey, googleKey } = await req.json();
-    
-    const OPENAI_API_KEY = openaiKey || Deno.env.get("OPENAI_API_KEY");
-    const GOOGLE_AI_API_KEY = googleKey || Deno.env.get("GOOGLE_AI_API_KEY");
+
+    // Get keys: prioritize passed keys, then DB, then env
+    let OPENAI_API_KEY = openaiKey || "";
+    let GOOGLE_AI_API_KEY = googleKey || "";
+
+    if (!OPENAI_API_KEY || !GOOGLE_AI_API_KEY) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+        const { data } = await supabase
+          .from("app_settings")
+          .select("openai_api_key, google_ai_api_key")
+          .eq("id", "default")
+          .single();
+        if (!OPENAI_API_KEY) OPENAI_API_KEY = data?.openai_api_key || "";
+        if (!GOOGLE_AI_API_KEY) GOOGLE_AI_API_KEY = data?.google_ai_api_key || "";
+      } catch {}
+    }
+
+    if (!OPENAI_API_KEY) OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+    if (!GOOGLE_AI_API_KEY) GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY") || "";
     
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY non configurata");
     if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY non configurata");
