@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.ai-autofill]
 verify_jwt = false
+
+[functions.api-settings]
+verify_jwt = false
