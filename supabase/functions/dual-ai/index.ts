@@ -91,10 +91,10 @@ ${prompt}`;
       };
     };
 
-    // Call all three models in parallel
+    // Call all three models in parallel (top-tier reasoning models)
     const [geminiResult, gptResult, gpt52Result] = await Promise.all([
-      callModel("google/gemini-2.5-flash"),
-      callModel("openai/gpt-5-mini"),
+      callModel("google/gemini-2.5-pro"),
+      callModel("openai/gpt-5"),
       callModel("openai/gpt-5.2"),
     ]);
 
