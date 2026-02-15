@@ -10,20 +10,28 @@ const SYSTEM_PROMPT = `Sei un assistente strategico per i social e per la creazi
 
 Struttura l'output in modo sintetico, d'impatto, con testi efficaci che definiscono la strategia senza essere troppo prolissi. Il testo deve essere adatto per essere inserito in una presentazione professionale.
 
-Rispondi SEMPRE in italiano. Usa un tono professionale ma diretto. Formatta l'output in markdown con titoli, tabelle e liste dove appropriato.`;
+REGOLE DI FORMATTAZIONE FONDAMENTALI:
+- Rispondi SEMPRE in italiano.
+- Usa un tono professionale ma diretto.
+- Formatta l'output in MARKDOWN PURO (titoli ##, ###, tabelle con | e ---, liste, **grassetto**).
+- NON usare MAI tag HTML come <b>, <br>, <i>, <strong>, <p>, <div> ecc. Usa SOLO sintassi markdown.
+- Per le tabelle, usa il formato markdown standard con | separatori e --- per le intestazioni.
+- Per andare a capo, usa semplicemente una riga vuota.`;
 
-const MERGE_SYSTEM_PROMPT = `Sei un editor strategico senior. Il tuo compito è creare un output UNICO e DEFINITIVO partendo da TRE analisi prodotte da tre AI diverse (Gemini, ChatGPT e GPT-5.2).
+const MERGE_SYSTEM_PROMPT = `Sei un editor strategico senior. Il tuo compito è creare un output UNICO e DEFINITIVO partendo da DUE analisi prodotte da due AI diverse (Gemini e ChatGPT).
 
 REGOLE FONDAMENTALI:
-1. NON fare una sintesi riduttiva. Devi PRENDERE IL MEGLIO da tutte e tre le analisi.
-2. Se un'analisi ha punti più approfonditi su un tema, usa quelli. Se un'altra ha insight unici, includili.
-3. L'output finale deve essere PIÙ RICCO di ciascuna delle tre analisi singole, non più povero.
+1. NON fare una sintesi riduttiva. Devi PRENDERE IL MEGLIO da entrambe le analisi.
+2. Se un'analisi ha punti più approfonditi su un tema, usa quelli. Se l'altra ha insight unici, includili.
+3. L'output finale deve essere PIÙ RICCO di ciascuna delle due analisi singole, non più povero.
 4. Mantieni tabelle, elenchi puntati, struttura chiara.
 5. Usa un tono professionale e d'impatto, adatto a una presentazione.
-6. Formatta in markdown PERFETTO con titoli gerarchici (##, ###), tabelle, liste, bold per i concetti chiave.
-7. Rispondi SEMPRE in italiano.
-8. NON menzionare mai che stai facendo un merge o che ci sono tre fonti. Il risultato deve sembrare un'unica analisi autorevole.
-9. Organizza il contenuto in modo logico e visivamente pulito, con sezioni ben separate.`;
+6. Formatta in MARKDOWN PURO con titoli gerarchici (##, ###), tabelle markdown (con | e ---), liste, **bold** per i concetti chiave.
+7. NON usare MAI tag HTML (no <b>, <br>, <i>, <strong>, <p>, <div>, ecc.). Solo markdown puro.
+8. Rispondi SEMPRE in italiano.
+9. NON menzionare mai che stai facendo un merge o che ci sono due fonti. Il risultato deve sembrare un'unica analisi autorevole.
+10. Organizza il contenuto in modo logico e visivamente pulito, con sezioni ben separate.
+11. Per andare a capo usa una riga vuota, NON <br>.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -84,8 +92,12 @@ ${prompt}`;
       }
 
       const data = await response.json();
+      // Strip any HTML tags from the response
+      let content = data.choices?.[0]?.message?.content || "";
+      content = content.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+      
       return {
-        content: data.choices?.[0]?.message?.content || "",
+        content,
         model,
         usage: data.usage,
       };
@@ -126,7 +138,7 @@ ${prompt}`;
 
 ${availableAnalyses.join("\n\n")}
 
-Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCHISCI.`,
+Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCHISCI. NON usare tag HTML, solo markdown puro.`,
                 },
               ],
               stream: false,
@@ -136,8 +148,12 @@ Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCH
 
         if (mergeResponse.ok) {
           const mergeData = await mergeResponse.json();
+          let mergedContent = mergeData.choices?.[0]?.message?.content || "";
+          // Final sanitization: strip any remaining HTML tags
+          mergedContent = mergedContent.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+          
           merged = {
-            content: mergeData.choices?.[0]?.message?.content || "",
+            content: mergedContent,
             model: "merged",
           };
         }
