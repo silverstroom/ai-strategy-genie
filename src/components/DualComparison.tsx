@@ -1,5 +1,6 @@
 import { AIResult } from "@/lib/strategy-steps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Check, Sparkles, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -66,7 +67,7 @@ export const DualComparison = ({ gemini, gpt, selected, onSelect, isLoading }: D
             <p className="text-destructive text-sm">{gemini.error}</p>
           ) : (
             <div className="prose prose-sm max-w-none text-card-foreground">
-              <ReactMarkdown>{gemini.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{gemini.content}</ReactMarkdown>
             </div>
           )}
         </CardContent>
@@ -99,7 +100,7 @@ export const DualComparison = ({ gemini, gpt, selected, onSelect, isLoading }: D
             <p className="text-destructive text-sm">{gpt.error}</p>
           ) : (
             <div className="prose prose-sm max-w-none text-card-foreground">
-              <ReactMarkdown>{gpt.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{gpt.content}</ReactMarkdown>
             </div>
           )}
         </CardContent>

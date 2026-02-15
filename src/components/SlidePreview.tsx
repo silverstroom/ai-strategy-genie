@@ -1,5 +1,6 @@
 import { StepResult, STRATEGY_STEPS, ClientInfo } from "@/lib/strategy-steps";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Loader2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -116,8 +117,8 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading }: SlidePre
                     </li>
                   ),
                   table: ({ children }) => (
-                    <div className="my-6 rounded-xl border border-border overflow-hidden shadow-sm">
-                      <table className="w-full text-sm">{children}</table>
+                    <div className="my-6 rounded-xl border border-border overflow-x-auto shadow-sm">
+                      <table className="w-full text-sm min-w-[600px]">{children}</table>
                     </div>
                   ),
                   thead: ({ children }) => (
@@ -148,7 +149,7 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading }: SlidePre
                     </code>
                   ),
                 }}
-              >
+              remarkPlugins={[remarkGfm]}>
                 {mergedContent}
               </ReactMarkdown>
             </article>
