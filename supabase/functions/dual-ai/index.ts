@@ -91,23 +91,20 @@ ${prompt}`;
       };
     };
 
-    // Call all three models in parallel (top-tier reasoning models)
-    const [geminiResult, gptResult, gpt52Result] = await Promise.all([
+    // Call both top-tier models in parallel
+    const [geminiResult, gptResult] = await Promise.all([
       callModel("google/gemini-2.5-pro"),
       callModel("openai/gpt-5"),
-      callModel("openai/gpt-5.2"),
     ]);
 
-    // Auto-merge: take the best from all three results
+    // Auto-merge: take the best from both results
     let merged = null;
     const geminiContent = geminiResult.error ? "" : geminiResult.content;
     const gptContent = gptResult.error ? "" : gptResult.content;
-    const gpt52Content = gpt52Result.error ? "" : gpt52Result.content;
 
     const availableAnalyses: string[] = [];
     if (geminiContent) availableAnalyses.push(`--- ANALISI A (Gemini) ---\n${geminiContent}`);
-    if (gptContent) availableAnalyses.push(`--- ANALISI B (GPT-5 Mini) ---\n${gptContent}`);
-    if (gpt52Content) availableAnalyses.push(`--- ANALISI C (GPT-5.2) ---\n${gpt52Content}`);
+    if (gptContent) availableAnalyses.push(`--- ANALISI B (GPT-5) ---\n${gptContent}`);
 
     if (availableAnalyses.length >= 2) {
       try {
@@ -152,7 +149,7 @@ Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCH
     // If merge failed, fallback
     if (!merged) {
       merged = {
-        content: geminiContent || gptContent || gpt52Content || "Errore nella generazione.",
+        content: geminiContent || gptContent || "Errore nella generazione.",
         model: "fallback",
       };
     }
@@ -161,7 +158,6 @@ Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCH
       JSON.stringify({
         gemini: geminiResult,
         gpt: gptResult,
-        gpt52: gpt52Result,
         merged,
         step,
       }),

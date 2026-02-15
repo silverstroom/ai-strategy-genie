@@ -60,7 +60,6 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         step: stepId,
         gemini: data.gemini,
         gpt: data.gpt,
-        gpt52: data.gpt52,
         merged: data.merged,
       };
     } catch {
@@ -108,9 +107,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         setBatchStatus((prev) => ({ ...prev, [step.id]: "error" }));
       }
 
-      if (i < STRATEGY_STEPS.length - 1 && !abortRef.current) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
+      // No delay between steps for maximum speed
     }
 
     setMode("review");
@@ -194,13 +191,10 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
                     {status === "generating" && (
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <Sparkles className="h-2.5 w-2.5" /> Gemini
+                          <Sparkles className="h-2.5 w-2.5" /> Gemini Pro
                         </span>
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                           <Zap className="h-2.5 w-2.5" /> GPT-5
-                        </span>
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <Brain className="h-2.5 w-2.5" /> GPT-5.2
                         </span>
                       </div>
                     )}
