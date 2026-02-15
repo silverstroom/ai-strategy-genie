@@ -1,0 +1,4 @@
+project_id = "gpfdrrpwmslsomtoazfw"
+
+[functions.dual-ai]
+verify_jwt = false
