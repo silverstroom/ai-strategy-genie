@@ -39,10 +39,10 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, step, clientInfo } = await req.json();
+    const { prompt, step, clientInfo, openaiKey, googleKey } = await req.json();
     
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = openaiKey || Deno.env.get("OPENAI_API_KEY");
+    const GOOGLE_AI_API_KEY = googleKey || Deno.env.get("GOOGLE_AI_API_KEY");
     
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY non configurata");
     if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY non configurata");

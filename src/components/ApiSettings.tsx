@@ -16,8 +16,8 @@ interface ApiSettingsProps {
 }
 
 export const ApiSettings = ({ onClose }: ApiSettingsProps) => {
-  const [openaiKey, setOpenaiKey] = useState("");
-  const [googleKey, setGoogleKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem("openai_api_key") || "");
+  const [googleKey, setGoogleKey] = useState(() => localStorage.getItem("google_ai_api_key") || "");
   const [showOpenai, setShowOpenai] = useState(false);
   const [showGoogle, setShowGoogle] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -83,6 +83,12 @@ export const ApiSettings = ({ onClose }: ApiSettingsProps) => {
     } finally {
       setTesting(false);
     }
+  };
+
+  const saveKeys = () => {
+    if (openaiKey) localStorage.setItem("openai_api_key", openaiKey);
+    if (googleKey) localStorage.setItem("google_ai_api_key", googleKey);
+    toast.success("API key salvate localmente!");
   };
 
   return (
@@ -180,11 +186,15 @@ export const ApiSettings = ({ onClose }: ApiSettingsProps) => {
 
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2">
-            <Button onClick={testKeys} disabled={testing} className="gap-2 flex-1 gradient-gold text-accent-foreground">
-              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
-              Testa connessione
+            <Button onClick={saveKeys} disabled={!openaiKey && !googleKey} className="gap-2 flex-1 gradient-gold text-accent-foreground">
+              <Key className="h-4 w-4" />
+              Salva
             </Button>
-            <Button variant="outline" onClick={onClose}>
+            <Button onClick={testKeys} disabled={testing} variant="outline" className="gap-2">
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
+              Testa
+            </Button>
+            <Button variant="ghost" onClick={onClose}>
               Chiudi
             </Button>
           </div>
