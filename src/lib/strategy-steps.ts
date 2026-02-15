@@ -31,6 +31,7 @@ export interface StepResult {
   step: number;
   gemini: AIResult;
   gpt: AIResult;
+  merged?: AIResult;
   selected?: "gemini" | "gpt";
 }
 
