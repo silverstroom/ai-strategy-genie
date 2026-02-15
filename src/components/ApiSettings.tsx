@@ -16,8 +16,8 @@ interface ApiSettingsProps {
 }
 
 export const ApiSettings = ({ onClose }: ApiSettingsProps) => {
-  const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem("openai_api_key") || "");
-  const [googleKey, setGoogleKey] = useState(() => localStorage.getItem("google_ai_api_key") || "");
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [googleKey, setGoogleKey] = useState("");
   const [showOpenai, setShowOpenai] = useState(false);
   const [showGoogle, setShowGoogle] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -85,10 +85,29 @@ export const ApiSettings = ({ onClose }: ApiSettingsProps) => {
     }
   };
 
-  const saveKeys = () => {
-    if (openaiKey) localStorage.setItem("openai_api_key", openaiKey);
-    if (googleKey) localStorage.setItem("google_ai_api_key", googleKey);
-    toast.success("API key salvate localmente!");
+  const saveKeys = async () => {
+    try {
+      const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/api-settings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          action: "save",
+          openaiKey: openaiKey || undefined,
+          googleKey: googleKey || undefined,
+        }),
+      });
+      if (r.ok) {
+        toast.success("API key salvate con successo!");
+        fetchCurrentKeys();
+      } else {
+        toast.error("Errore nel salvataggio");
+      }
+    } catch {
+      toast.error("Errore di connessione");
+    }
   };
 
   return (

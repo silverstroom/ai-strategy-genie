@@ -14,7 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_settings: {
+        Row: {
+          google_ai_api_key: string | null
+          id: string
+          openai_api_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          google_ai_api_key?: string | null
+          id?: string
+          openai_api_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          google_ai_api_key?: string | null
+          id?: string
+          openai_api_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

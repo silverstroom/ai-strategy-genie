@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,11 +13,23 @@ serve(async (req) => {
   }
 
   try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     const { action, openaiKey, googleKey } = await req.json();
 
     if (action === "get") {
-      const openai = Deno.env.get("OPENAI_API_KEY") || "";
-      const google = Deno.env.get("GOOGLE_AI_API_KEY") || "";
+      const { data } = await supabase
+        .from("app_settings")
+        .select("openai_api_key, google_ai_api_key")
+        .eq("id", "default")
+        .single();
+
+      const openai = data?.openai_api_key || "";
+      const google = data?.google_ai_api_key || "";
+
       return new Response(
         JSON.stringify({
           openai: openai ? `${openai.slice(0, 8)}...${openai.slice(-4)}` : "",
@@ -28,11 +41,58 @@ serve(async (req) => {
       );
     }
 
+    if (action === "save") {
+      const updates: Record<string, string> = { updated_at: new Date().toISOString() };
+      if (openaiKey) updates.openai_api_key = openaiKey;
+      if (googleKey) updates.google_ai_api_key = googleKey;
+
+      const { error } = await supabase
+        .from("app_settings")
+        .update(updates)
+        .eq("id", "default");
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ ok: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "get_keys") {
+      // Internal: return full keys for edge functions
+      const { data } = await supabase
+        .from("app_settings")
+        .select("openai_api_key, google_ai_api_key")
+        .eq("id", "default")
+        .single();
+
+      return new Response(
+        JSON.stringify({
+          openaiKey: data?.openai_api_key || "",
+          googleKey: data?.google_ai_api_key || "",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (action === "test") {
+      // Get keys: use provided ones or fall back to DB
+      let oaiKey = openaiKey;
+      let gKey = googleKey;
+
+      if (!oaiKey || !gKey) {
+        const { data } = await supabase
+          .from("app_settings")
+          .select("openai_api_key, google_ai_api_key")
+          .eq("id", "default")
+          .single();
+        if (!oaiKey) oaiKey = data?.openai_api_key || "";
+        if (!gKey) gKey = data?.google_ai_api_key || "";
+      }
+
       const results: Record<string, { ok: boolean; error?: string }> = {};
 
-      // Test OpenAI
-      const oaiKey = openaiKey || Deno.env.get("OPENAI_API_KEY");
       if (oaiKey) {
         try {
           const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -48,7 +108,6 @@ serve(async (req) => {
             }),
           });
           if (r.ok) {
-            const d = await r.json();
             results.openai = { ok: true };
           } else {
             const t = await r.text();
@@ -61,8 +120,6 @@ serve(async (req) => {
         results.openai = { ok: false, error: "API Key non configurata" };
       }
 
-      // Test Google
-      const gKey = googleKey || Deno.env.get("GOOGLE_AI_API_KEY");
       if (gKey) {
         try {
           const r = await fetch(
@@ -77,7 +134,6 @@ serve(async (req) => {
             }
           );
           if (r.ok) {
-            const d = await r.json();
             results.google = { ok: true };
           } else {
             const t = await r.text();
