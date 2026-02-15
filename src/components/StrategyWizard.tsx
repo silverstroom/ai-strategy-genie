@@ -5,16 +5,15 @@ import { SlidePreview } from "@/components/SlidePreview";
 import { DualComparison } from "@/components/DualComparison";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, CheckCircle2, Sparkles, Zap, Rocket, Presentation, Brain } from "lucide-react";
+import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, Rocket, Presentation, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { Progress } from "@/components/ui/progress";
 
 interface StrategyWizardProps {
   clientInfo: ClientInfo;
   onReset: () => void;
 }
 
-type WizardMode = "idle" | "batch" | "review";
+type WizardMode = "idle" | "review";
 type ReviewView = "slide" | "compare";
 
 export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => {
@@ -23,8 +22,9 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<WizardMode>("idle");
   const [reviewView, setReviewView] = useState<ReviewView>("slide");
-  const [batchStep, setBatchStep] = useState(0);
-  const [batchStatus, setBatchStatus] = useState<Record<number, "pending" | "generating" | "done" | "error">>({});
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [generatingStepId, setGeneratingStepId] = useState<number | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const abortRef = useRef(false);
 
   const completedSteps = Object.keys(results).map(Number);
@@ -83,35 +83,30 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
   };
 
   const startBatchGeneration = async () => {
-    setMode("batch");
+    // Go to review mode immediately so user can see results as they come in
+    setMode("review");
+    setCurrentStep(1);
+    setIsGeneratingAll(true);
     abortRef.current = false;
-
-    const initialStatus: Record<number, "pending" | "generating" | "done" | "error"> = {};
-    STRATEGY_STEPS.forEach((s) => { initialStatus[s.id] = "pending"; });
-    setBatchStatus(initialStatus);
-    setBatchStep(0);
 
     for (let i = 0; i < STRATEGY_STEPS.length; i++) {
       if (abortRef.current) break;
 
       const step = STRATEGY_STEPS[i];
-      setBatchStep(i + 1);
-      setBatchStatus((prev) => ({ ...prev, [step.id]: "generating" }));
+      setGeneratingStepId(step.id);
 
       const result = await generateSingleStep(step.id);
 
       if (result) {
         setResults((prev) => ({ ...prev, [step.id]: result }));
-        setBatchStatus((prev) => ({ ...prev, [step.id]: "done" }));
       } else {
-        setBatchStatus((prev) => ({ ...prev, [step.id]: "error" }));
+        toast.error(`Errore nello step ${step.id}: ${step.shortTitle}`);
       }
-
-      // No delay between steps for maximum speed
     }
 
-    setMode("review");
-    setCurrentStep(1);
+    setIsGeneratingAll(false);
+    setGeneratingStepId(null);
+    toast.success("Analisi completa terminata!");
   };
 
   const selectResult = (choice: "gemini" | "gpt") => {
@@ -120,104 +115,6 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
       [currentStep]: { ...prev[currentStep], selected: choice },
     }));
   };
-
-  const progressPercent = mode === "batch"
-    ? (batchStep / STRATEGY_STEPS.length) * 100
-    : (completedSteps.length / STRATEGY_STEPS.length) * 100;
-
-  // Batch generation view
-  if (mode === "batch") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="max-w-2xl w-full space-y-8 animate-fade-in">
-          <div className="text-center space-y-3">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 text-accent text-sm font-semibold">
-              <Rocket className="h-4 w-4" />
-              Generazione in corso
-            </div>
-            <h1 className="font-serif text-3xl text-foreground">{clientInfo.name}</h1>
-            <p className="text-muted-foreground text-sm">
-              Analisi strategica completa — Step {batchStep} di {STRATEGY_STEPS.length}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Progress value={progressPercent} className="h-3 rounded-full" />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Avvio</span>
-              <span className="font-semibold text-accent">{Math.round(progressPercent)}%</span>
-              <span>Completo</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {STRATEGY_STEPS.map((step) => {
-              const status = batchStatus[step.id] || "pending";
-              return (
-                <div
-                  key={step.id}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all duration-500 ${
-                    status === "generating"
-                      ? "border-accent bg-accent/5 shadow-md shadow-accent/10 scale-[1.02]"
-                      : status === "done"
-                      ? "border-green-500/30 bg-green-500/5"
-                      : status === "error"
-                      ? "border-destructive/30 bg-destructive/5"
-                      : "border-border bg-card/50 opacity-50"
-                  }`}
-                >
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${
-                    status === "generating" ? "bg-accent/20"
-                      : status === "done" ? "bg-green-500/20"
-                      : status === "error" ? "bg-destructive/20"
-                      : "bg-muted"
-                  }`}>
-                    {status === "generating" ? (
-                      <Loader2 className="h-4 w-4 text-accent animate-spin" />
-                    ) : status === "done" ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    ) : status === "error" ? (
-                      <span className="text-xs text-destructive font-bold">!</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground font-mono">{step.id}</span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-medium truncate ${
-                      status === "generating" ? "text-accent" : status === "done" ? "text-foreground" : "text-muted-foreground"
-                    }`}>
-                      {step.shortTitle}
-                    </p>
-                    {status === "generating" && (
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <Sparkles className="h-2.5 w-2.5" /> Gemini Pro
-                        </span>
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <Zap className="h-2.5 w-2.5" /> GPT-5
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="text-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { abortRef.current = true; setMode("review"); }}
-              className="text-muted-foreground"
-            >
-              Interrompi e rivedi i risultati
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Idle mode
   if (mode === "idle" && completedSteps.length === 0) {
@@ -243,7 +140,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
                 <div>
                   <h3 className="font-semibold text-foreground text-lg">Genera tutto in automatico</h3>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Tutti gli 11 step generati in sequenza. Rivedi e seleziona alla fine.
+                    Tutti gli 11 step generati in sequenza. Rivedi i risultati in tempo reale.
                   </p>
                 </div>
               </CardContent>
@@ -277,7 +174,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
     );
   }
 
-  // Review / step-by-step mode
+  // Review / step-by-step mode (also used during batch generation)
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top progress bar */}
@@ -285,6 +182,8 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         currentStep={currentStep}
         completedSteps={completedSteps}
         onStepClick={setCurrentStep}
+        generatingStepId={generatingStepId}
+        isGeneratingAll={isGeneratingAll}
       />
 
       {/* Toolbar */}
@@ -296,6 +195,16 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
           <span className="text-xs text-muted-foreground">
             {clientInfo.name} · {clientInfo.sector}
           </span>
+          {isGeneratingAll && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { abortRef.current = true; setIsGeneratingAll(false); setGeneratingStepId(null); }}
+              className="text-xs gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              Interrompi generazione
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* View toggle */}
@@ -333,7 +242,11 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
             stepId={currentStep}
             result={currentResult}
             clientInfo={clientInfo}
-            isLoading={loading}
+            isLoading={loading || (isGeneratingAll && generatingStepId === currentStep)}
+            logoUrl={logoUrl}
+            onLogoUpload={setLogoUrl}
+            onLogoRemove={() => setLogoUrl(null)}
+            onRegenerate={generateStep}
           />
         ) : (
           <div className="max-w-6xl mx-auto px-4">
@@ -375,7 +288,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         )}
 
         {/* Generate button for slide view when no result */}
-        {reviewView === "slide" && !currentResult && !loading && (
+        {reviewView === "slide" && !currentResult && !loading && !(isGeneratingAll && generatingStepId === currentStep) && (
           <div className="text-center mt-6">
             <Button size="lg" onClick={generateStep} className="gap-2 gradient-gold text-accent-foreground">
               <Play className="h-5 w-5" /> Genera Step {currentStep}
@@ -389,20 +302,22 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         <div className="flex items-center gap-2">
           {currentResult && (
             <>
-              <Button variant="outline" size="sm" onClick={generateStep} disabled={loading} className="gap-1.5">
+              <Button variant="outline" size="sm" onClick={generateStep} disabled={loading || isGeneratingAll} className="gap-1.5">
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                 Rigenera
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { startBatchGeneration(); }}
-                disabled={loading}
-                className="gap-1.5"
-              >
-                <Rocket className="h-3.5 w-3.5" />
-                Rigenera tutti gli step
-              </Button>
+              {!isGeneratingAll && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { startBatchGeneration(); }}
+                  disabled={loading}
+                  className="gap-1.5"
+                >
+                  <Rocket className="h-3.5 w-3.5" />
+                  Rigenera tutti gli step
+                </Button>
+              )}
             </>
           )}
         </div>
