@@ -11,19 +11,26 @@ import { useAuth } from "@/hooks/useAuth";
 const Index = () => {
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const { isLoggedIn, logout } = useAuth();
 
   if (!isLoggedIn) {
     return <LoginForm />;
   }
 
+  const handleClientSubmit = (info: ClientInfo, logo?: string) => {
+    setClientInfo(info);
+    if (logo) setLogoUrl(logo);
+  };
+
   if (clientInfo) {
     return (
       <>
         <StrategyWizard
           clientInfo={clientInfo}
-          onReset={() => setClientInfo(null)}
+          onReset={() => { setClientInfo(null); setLogoUrl(null); }}
           onOpenApiSettings={() => setShowApiSettings(true)}
+          initialLogoUrl={logoUrl}
         />
         {showApiSettings && <ApiSettings onClose={() => setShowApiSettings(false)} />}
       </>
@@ -119,7 +126,7 @@ const Index = () => {
               <ArrowRight className="h-5 w-5 text-accent" />
               <h2 className="font-serif text-2xl text-foreground">Inizia l'Analisi</h2>
             </div>
-            <ClientForm onSubmit={setClientInfo} />
+            <ClientForm onSubmit={handleClientSubmit} />
           </div>
         </div>
       </section>

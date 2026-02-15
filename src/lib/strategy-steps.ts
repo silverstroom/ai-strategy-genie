@@ -46,7 +46,23 @@ export const STRATEGY_STEPS: StepDefinition[] = [
     id: 2,
     title: "Analisi Social (Presenza Attuale)",
     shortTitle: "Social",
-    prompt: `Analizza la PRESENZA SOCIAL ATTUALE del cliente. Per ogni canale (Facebook, Instagram, LinkedIn, YouTube, TikTok) indica: stato (attivo/non attivo), coerenza visiva e tono, tipologie contenuti, frequenza, qualità/consistenza, punti di miglioramento, margine di sviluppo per il brand. Sii sintetico.`,
+    prompt: `Analizza in modo APPROFONDITO la PRESENZA SOCIAL ATTUALE del cliente.
+
+Per OGNI canale social (Facebook, Instagram, LinkedIn, YouTube, TikTok), crea una sezione dedicata con il nome del canale come titolo (## Facebook, ## Instagram, ecc.).
+
+Per ogni canale analizza TUTTI questi punti in modo dettagliato:
+
+1. **Stato**: Attivo / Non attivo / Inattivo da tempo. Se non presente, indica "Non presente" e suggerisci se ha senso aprirlo per questo tipo di business.
+2. **Coerenza Visiva e Tono**: Il profilo ha un'identità visiva coerente? Il tono di voce è adeguato al target? Ci sono incongruenze?
+3. **Tipologie di Contenuti**: Che tipo di contenuti pubblica? (foto, video, caroselli, stories, reels, articoli, ecc.) Quali funzionano meglio?
+4. **Frequenza di Pubblicazione**: Quanto pubblica? È costante o irregolare? (se deducibile dai dati disponibili)
+5. **Qualità e Consistenza**: La qualità dei contenuti è alta, media o bassa? C'è coerenza nel tempo?
+6. **Punti Evidenti di Miglioramento**: Cosa dovrebbe migliorare immediatamente su questo canale?
+7. **Margine di Sviluppo Strategico**: Come potrebbe sfruttare meglio questo canale per il suo brand? (es. Facebook per raccolta lead su un target specifico, Instagram per brand awareness, LinkedIn per B2B networking, YouTube per tutorial/authority, TikTok per raggiungere Gen Z, ecc.)
+
+IMPORTANTE: Non limitarti a elenchi generici. Fai un'analisi CONCRETA basata sul tipo di business, settore e target del cliente. Ogni punto deve essere specifico e azionabile.
+
+Se un canale non è presente, dedica comunque una sezione spiegando se e perché dovrebbe essere attivato.`,
   },
   {
     id: 3,
@@ -65,12 +81,31 @@ IMPORTANTE: Usa tabelle markdown standard con | e ---. NON usare mai tag HTML co
     id: 4,
     title: "Competitor",
     shortTitle: "Competitor",
-    prompt: `Identifica COMPETITOR su 3 livelli con tabelle. Per ogni livello (Nazionali, Regionali, Locali) crea una tabella con 4 colonne:
-- Competitor
-- Cosa fanno molto bene sui social
-- Dove il cliente è potenzialmente migliore
-- Come il cliente può usare il benchmark
-4 righe per ogni gruppo. Ogni riga deve essere concreta e operativa. NON usare tag HTML.`,
+    prompt: `Identifica i COMPETITOR del cliente su 3 livelli. Per ogni livello crea una TABELLA MARKDOWN con 5 colonne e 4 righe di competitor.
+
+## Competitor Nazionali
+
+| Competitor | Canali Attivi | Cosa fanno molto bene sui social | Dove il cliente è potenzialmente migliore | Come il cliente può usare il benchmark |
+|---|---|---|---|---|
+| Nome 1 | Instagram, Facebook | Dettaglio concreto | Dettaglio concreto | Azione specifica |
+| Nome 2 | ... | ... | ... | ... |
+| Nome 3 | ... | ... | ... | ... |
+| Nome 4 | ... | ... | ... | ... |
+
+## Competitor Regionali
+
+(Stessa struttura tabella 5 colonne x 4 righe)
+
+## Competitor Locali
+
+(Stessa struttura tabella 5 colonne x 4 righe)
+
+REGOLE:
+- Usa SEMPRE il formato tabella markdown con | e ---
+- Ogni riga deve contenere informazioni CONCRETE e SPECIFICHE, non generiche
+- I nomi dei competitor devono essere REALI e verificabili
+- La colonna "Come il cliente può usare il benchmark" deve contenere AZIONI OPERATIVE specifiche
+- NON usare tag HTML. Solo markdown puro.`,
   },
   {
     id: 5,
@@ -157,11 +192,27 @@ IMPORTANTE: Fornisci SEMPRE i codici esadecimali nel formato #XXXXXX. NON usare 
     id: 9,
     title: "Font",
     shortTitle: "Font",
-    prompt: `Fornisci consigli FONT per il cliente (disponibili su Canva/Google Fonts):
-- Font Titolo: nome, perché si adatta al brand
-- Font Corpo: nome, perché funziona in abbinamento
-- Esempi di utilizzo concreto
-Massimo 2-3 proposte di abbinamento. NON usare tag HTML.`,
+    prompt: `Fornisci consigli FONT per il cliente. TUTTI i font suggeriti devono essere disponibili su Google Fonts.
+
+Per ogni proposta di abbinamento (massimo 3 proposte), indica:
+
+### Proposta X: [Nome Font Titolo] + [Nome Font Corpo]
+
+**Font Titolo:** [Nome esatto su Google Fonts]
+- Perché si adatta al brand
+- Stile: serif/sans-serif/display/handwriting
+- Peso consigliato: (es. Bold 700, SemiBold 600)
+
+**Font Corpo:** [Nome esatto su Google Fonts]  
+- Perché funziona in abbinamento
+- Stile e peso consigliato per il corpo testo
+
+**Testo di esempio con questo abbinamento:**
+> [Scrivi una frase d'esempio che rappresenti il brand del cliente, ad esempio un headline + un paragrafo breve, specificando quale font va usato per cosa]
+
+**Dove usarli:** (social, sito web, presentazioni, ecc.)
+
+IMPORTANTE: Usa SOLO font disponibili su Google Fonts. Indica il nome ESATTO come appare su fonts.google.com. NON usare tag HTML.`,
   },
   {
     id: 10,

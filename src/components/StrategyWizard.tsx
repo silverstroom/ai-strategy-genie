@@ -12,12 +12,13 @@ interface StrategyWizardProps {
   clientInfo: ClientInfo;
   onReset: () => void;
   onOpenApiSettings?: () => void;
+  initialLogoUrl?: string | null;
 }
 
 type WizardMode = "idle" | "review";
 type ReviewView = "slide" | "compare";
 
-export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: StrategyWizardProps) => {
+export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initialLogoUrl }: StrategyWizardProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [results, setResults] = useState<Record<number, StepResult>>({});
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,8 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
   const [reviewView, setReviewView] = useState<ReviewView>("slide");
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generatingStepId, setGeneratingStepId] = useState<number | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl || null);
+  const [regenerateQueue, setRegenerateQueue] = useState<number[]>([]);
   const abortRef = useRef(false);
 
   const completedSteps = Object.keys(results).map(Number);
@@ -58,7 +60,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
 
       const data = await response.json();
       
-      // Check if both AI models failed (API key issues)
       const bothFailed = data.gemini?.error && data.gpt?.error;
       if (bothFailed) {
         const isQuota = data.gemini.status === 402 || data.gemini.status === 429 || data.gpt.status === 402 || data.gpt.status === 429;
@@ -85,6 +86,16 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
   }, [clientInfo]);
 
   const generateStep = async () => {
+    // If batch generation is running, queue this step instead
+    if (isGeneratingAll) {
+      setRegenerateQueue((prev) => {
+        if (prev.includes(currentStep)) return prev;
+        toast.info(`Step ${currentStep} aggiunto alla coda di rigenerazione`);
+        return [...prev, currentStep];
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await generateSingleStep(currentStep);
@@ -100,7 +111,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
   };
 
   const startBatchGeneration = async () => {
-    // Go to review mode immediately so user can see results as they come in
     setMode("review");
     setCurrentStep(1);
     setIsGeneratingAll(true);
@@ -121,8 +131,33 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
       }
     }
 
+    // Process queued regenerations
+    while (!abortRef.current) {
+      let nextInQueue: number | undefined;
+      setRegenerateQueue((prev) => {
+        if (prev.length === 0) return prev;
+        nextInQueue = prev[0];
+        return prev.slice(1);
+      });
+      // Need to wait a tick to get the value
+      await new Promise((r) => setTimeout(r, 50));
+      // Re-read queue
+      let queueSnapshot: number[] = [];
+      setRegenerateQueue((prev) => { queueSnapshot = prev; return prev; });
+      if (!nextInQueue && queueSnapshot.length === 0) break;
+      if (nextInQueue) {
+        setGeneratingStepId(nextInQueue);
+        const result = await generateSingleStep(nextInQueue);
+        if (result) {
+          setResults((prev) => ({ ...prev, [nextInQueue!]: result }));
+          toast.success(`Step ${nextInQueue} rigenerato!`);
+        }
+      }
+    }
+
     setIsGeneratingAll(false);
     setGeneratingStepId(null);
+    setRegenerateQueue([]);
     toast.success("Analisi completa terminata!");
   };
 
@@ -191,10 +226,9 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
     );
   }
 
-  // Review / step-by-step mode (also used during batch generation)
+  // Review / step-by-step mode
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Top progress bar */}
       <StepProgressBar
         currentStep={currentStep}
         completedSteps={completedSteps}
@@ -216,15 +250,19 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { abortRef.current = true; setIsGeneratingAll(false); setGeneratingStepId(null); }}
+              onClick={() => { abortRef.current = true; setIsGeneratingAll(false); setGeneratingStepId(null); setRegenerateQueue([]); }}
               className="text-xs gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
             >
               Interrompi generazione
             </Button>
           )}
+          {regenerateQueue.length > 0 && (
+            <span className="text-xs text-accent bg-accent/10 px-2 py-1 rounded">
+              In coda: {regenerateQueue.map(s => `Step ${s}`).join(", ")}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          {/* View toggle */}
           <div className="flex items-center bg-muted rounded-lg p-0.5">
             <button
               onClick={() => setReviewView("slide")}
@@ -309,7 +347,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
           </div>
         )}
 
-        {/* Generate button for slide view when no result */}
         {reviewView === "slide" && !currentResult && !loading && !(isGeneratingAll && generatingStepId === currentStep) && (
           <div className="text-center mt-6">
             <Button size="lg" onClick={generateStep} className="gap-2 gradient-gold text-accent-foreground">
@@ -324,9 +361,9 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
         <div className="flex items-center gap-2">
           {currentResult && (
             <>
-              <Button variant="outline" size="sm" onClick={generateStep} disabled={loading || isGeneratingAll} className="gap-1.5">
+              <Button variant="outline" size="sm" onClick={generateStep} disabled={loading} className="gap-1.5">
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                Rigenera
+                {isGeneratingAll ? "Metti in coda" : "Rigenera"}
               </Button>
               {!isGeneratingAll && (
                 <Button
