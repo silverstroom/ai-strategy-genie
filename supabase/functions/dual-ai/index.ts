@@ -12,17 +12,17 @@ Struttura l'output in modo sintetico, d'impatto, con testi efficaci che definisc
 
 Rispondi SEMPRE in italiano. Usa un tono professionale ma diretto. Formatta l'output in markdown con titoli, tabelle e liste dove appropriato.`;
 
-const MERGE_SYSTEM_PROMPT = `Sei un editor strategico senior. Il tuo compito è creare un output UNICO e DEFINITIVO partendo da due analisi prodotte da due AI diverse (Gemini e ChatGPT).
+const MERGE_SYSTEM_PROMPT = `Sei un editor strategico senior. Il tuo compito è creare un output UNICO e DEFINITIVO partendo da TRE analisi prodotte da tre AI diverse (Gemini, ChatGPT e GPT-5.2).
 
 REGOLE FONDAMENTALI:
-1. NON fare una sintesi riduttiva. Devi PRENDERE IL MEGLIO da entrambe le analisi.
-2. Se un'analisi ha punti più approfonditi su un tema, usa quelli. Se l'altra ha insight unici, includili.
-3. L'output finale deve essere PIÙ RICCO di ciascuna delle due analisi singole, non più povero.
+1. NON fare una sintesi riduttiva. Devi PRENDERE IL MEGLIO da tutte e tre le analisi.
+2. Se un'analisi ha punti più approfonditi su un tema, usa quelli. Se un'altra ha insight unici, includili.
+3. L'output finale deve essere PIÙ RICCO di ciascuna delle tre analisi singole, non più povero.
 4. Mantieni tabelle, elenchi puntati, struttura chiara.
 5. Usa un tono professionale e d'impatto, adatto a una presentazione.
 6. Formatta in markdown PERFETTO con titoli gerarchici (##, ###), tabelle, liste, bold per i concetti chiave.
 7. Rispondi SEMPRE in italiano.
-8. NON menzionare mai che stai facendo un merge o che ci sono due fonti. Il risultato deve sembrare un'unica analisi autorevole.
+8. NON menzionare mai che stai facendo un merge o che ci sono tre fonti. Il risultato deve sembrare un'unica analisi autorevole.
 9. Organizza il contenuto in modo logico e visivamente pulito, con sezioni ben separate.`;
 
 serve(async (req) => {
@@ -91,18 +91,25 @@ ${prompt}`;
       };
     };
 
-    // Call both models in parallel
-    const [geminiResult, gptResult] = await Promise.all([
+    // Call all three models in parallel
+    const [geminiResult, gptResult, gpt52Result] = await Promise.all([
       callModel("google/gemini-2.5-flash"),
       callModel("openai/gpt-5-mini"),
+      callModel("openai/gpt-5.2"),
     ]);
 
-    // Auto-merge: take the best from both results
+    // Auto-merge: take the best from all three results
     let merged = null;
     const geminiContent = geminiResult.error ? "" : geminiResult.content;
     const gptContent = gptResult.error ? "" : gptResult.content;
+    const gpt52Content = gpt52Result.error ? "" : gpt52Result.content;
 
-    if (geminiContent && gptContent) {
+    const availableAnalyses: string[] = [];
+    if (geminiContent) availableAnalyses.push(`--- ANALISI A (Gemini) ---\n${geminiContent}`);
+    if (gptContent) availableAnalyses.push(`--- ANALISI B (GPT-5 Mini) ---\n${gptContent}`);
+    if (gpt52Content) availableAnalyses.push(`--- ANALISI C (GPT-5.2) ---\n${gpt52Content}`);
+
+    if (availableAnalyses.length >= 2) {
       try {
         const mergeResponse = await fetch(
           "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -118,15 +125,11 @@ ${prompt}`;
                 { role: "system", content: MERGE_SYSTEM_PROMPT },
                 {
                   role: "user",
-                  content: `Ecco le due analisi da combinare per lo step "${prompt.slice(0, 100)}":
+                  content: `Ecco le ${availableAnalyses.length} analisi da combinare per lo step "${prompt.slice(0, 100)}":
 
---- ANALISI A ---
-${geminiContent}
+${availableAnalyses.join("\n\n")}
 
---- ANALISI B ---
-${gptContent}
-
-Crea l'output definitivo prendendo il meglio da entrambe. NON sintetizzare, ARRICCHISCI.`,
+Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCHISCI.`,
                 },
               ],
               stream: false,
@@ -146,10 +149,10 @@ Crea l'output definitivo prendendo il meglio da entrambe. NON sintetizzare, ARRI
       }
     }
 
-    // If merge failed, fallback to the better of the two
+    // If merge failed, fallback
     if (!merged) {
       merged = {
-        content: geminiContent || gptContent || "Errore nella generazione.",
+        content: geminiContent || gptContent || gpt52Content || "Errore nella generazione.",
         model: "fallback",
       };
     }
@@ -158,6 +161,7 @@ Crea l'output definitivo prendendo il meglio da entrambe. NON sintetizzare, ARRI
       JSON.stringify({
         gemini: geminiResult,
         gpt: gptResult,
+        gpt52: gpt52Result,
         merged,
         step,
       }),
