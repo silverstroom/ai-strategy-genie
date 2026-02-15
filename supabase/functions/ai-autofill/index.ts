@@ -82,7 +82,7 @@ Rispondi SOLO con un JSON valido, senza markdown o altro testo:
           contents: [
             { role: "user", parts: [{ text: `${systemPrompt}\n\n${prompt}` }] },
           ],
-          generationConfig: { maxOutputTokens: 1024 },
+          generationConfig: { maxOutputTokens: 4096 },
         }),
       }
     );
