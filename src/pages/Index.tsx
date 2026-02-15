@@ -3,12 +3,19 @@ import { ClientInfo } from "@/lib/strategy-steps";
 import { ClientForm } from "@/components/ClientForm";
 import { StrategyWizard } from "@/components/StrategyWizard";
 import { ApiSettings } from "@/components/ApiSettings";
-import { Sparkles, Zap, ArrowRight, Settings } from "lucide-react";
+import { LoginForm } from "@/components/LoginForm";
+import { Sparkles, Zap, ArrowRight, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const { isLoggedIn, logout } = useAuth();
+
+  if (!isLoggedIn) {
+    return <LoginForm />;
+  }
 
   if (clientInfo) {
     return (
@@ -25,8 +32,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Settings button */}
-      <div className="fixed top-4 right-4 z-40">
+      {/* Settings & Logout buttons */}
+      <div className="fixed top-4 right-4 z-40 flex gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -34,6 +41,14 @@ const Index = () => {
           className="gap-1.5 bg-card/80 backdrop-blur-sm"
         >
           <Settings className="h-3.5 w-3.5" /> API
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={logout}
+          className="gap-1.5 bg-card/80 backdrop-blur-sm"
+        >
+          <LogOut className="h-3.5 w-3.5" /> Esci
         </Button>
       </div>
 

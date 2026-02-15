@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,27 +14,32 @@ serve(async (req) => {
 
   try {
     const { query, website } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    // Fetch Google API key from database
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const { data: settings } = await supabase
+      .from("app_settings")
+      .select("google_ai_api_key")
+      .eq("id", "default")
+      .single();
+
+    const googleKey = settings?.google_ai_api_key;
+    if (!googleKey) {
+      return new Response(
+        JSON.stringify({ error: "Google AI API Key non configurata. Vai nelle impostazioni API." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const prompt = website
       ? `Ricerca informazioni sull'azienda "${query}" con sito web: ${website}`
       : `Ricerca informazioni sull'azienda "${query}"`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "system",
-              content: `Sei un assistente che ricerca informazioni sulle aziende italiane. Il tuo compito è trovare dati PRECISI e VERIFICABILI.
+    const systemPrompt = `Sei un assistente che ricerca informazioni sulle aziende italiane. Il tuo compito è trovare dati PRECISI e VERIFICABILI.
 
 ISTRUZIONI CRITICHE PER LA LOCALITÀ:
 - Cerca la SEDE OPERATIVA REALE dell'azienda, non indovinare.
@@ -65,33 +71,31 @@ Rispondi SOLO con un JSON valido, senza markdown o altro testo:
   "youtube": "URL completo canale YouTube o stringa vuota",
   "tiktok": "URL completo profilo TikTok o stringa vuota",
   "strategyType": "social"
-}`,
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
+}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            { role: "user", parts: [{ text: `${systemPrompt}\n\n${prompt}` }] },
           ],
-          stream: false,
+          generationConfig: { maxOutputTokens: 1024 },
         }),
       }
     );
 
     if (!response.ok) {
+      const t = await response.text();
+      console.error("Google AI error:", response.status, t);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit, riprova tra poco." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Crediti esauriti." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI error:", response.status, t);
       return new Response(JSON.stringify({ error: "Errore AI" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -99,7 +103,7 @@ Rispondi SOLO con un JSON valido, senza markdown o altro testo:
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     let parsed: Record<string, string> = {};
     try {
@@ -110,7 +114,6 @@ Rispondi SOLO con un JSON valido, senza markdown o altro testo:
       parsed = {};
     }
 
-    // Build socialLinks string from individual fields for backward compat
     const socialParts = [parsed.facebook, parsed.instagram, parsed.linkedin, parsed.youtube, parsed.tiktok]
       .filter(Boolean);
     if (socialParts.length > 0 && !parsed.socialLinks) {
