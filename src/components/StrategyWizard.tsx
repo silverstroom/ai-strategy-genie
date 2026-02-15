@@ -5,7 +5,7 @@ import { SlidePreview } from "@/components/SlidePreview";
 import { DualComparison } from "@/components/DualComparison";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, CheckCircle2, Sparkles, Zap, Rocket, Presentation } from "lucide-react";
+import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, CheckCircle2, Sparkles, Zap, Rocket, Presentation, Brain } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 
@@ -60,6 +60,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         step: stepId,
         gemini: data.gemini,
         gpt: data.gpt,
+        gpt52: data.gpt52,
         merged: data.merged,
       };
     } catch {
@@ -196,7 +197,10 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
                           <Sparkles className="h-2.5 w-2.5" /> Gemini
                         </span>
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <Zap className="h-2.5 w-2.5" /> GPT
+                          <Zap className="h-2.5 w-2.5" /> GPT-5
+                        </span>
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Brain className="h-2.5 w-2.5" /> GPT-5.2
                         </span>
                       </div>
                     )}
