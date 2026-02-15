@@ -5,29 +5,37 @@ import { SlidePreview } from "@/components/SlidePreview";
 import { DualComparison } from "@/components/DualComparison";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, Rocket, Presentation, Sparkles, Settings } from "lucide-react";
+import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, Rocket, Presentation, Sparkles, Settings, Download, Save, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
+import { exportToPptx } from "@/lib/export-pptx";
+import { saveProject, checkDuplicateProject } from "@/components/ProjectsPanel";
 
 interface StrategyWizardProps {
   clientInfo: ClientInfo;
   onReset: () => void;
   onOpenApiSettings?: () => void;
   initialLogoUrl?: string | null;
+  initialResults?: Record<number, StepResult> | null;
+  existingProjectId?: string | null;
+  onOpenProjects?: () => void;
 }
 
 type WizardMode = "idle" | "review";
 type ReviewView = "slide" | "compare";
 
-export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initialLogoUrl }: StrategyWizardProps) => {
+export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initialLogoUrl, initialResults, existingProjectId, onOpenProjects }: StrategyWizardProps) => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [results, setResults] = useState<Record<number, StepResult>>({});
+  const [results, setResults] = useState<Record<number, StepResult>>(initialResults || {});
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<WizardMode>("idle");
+  const [mode, setMode] = useState<WizardMode>(initialResults && Object.keys(initialResults).length > 0 ? "review" : "idle");
   const [reviewView, setReviewView] = useState<ReviewView>("slide");
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generatingStepId, setGeneratingStepId] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl || null);
   const [regenerateQueue, setRegenerateQueue] = useState<number[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(existingProjectId || null);
+  const [exporting, setExporting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const abortRef = useRef(false);
 
   const completedSteps = Object.keys(results).map(Number);
@@ -45,48 +53,31 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
             "Content-Type": "application/json",
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({
-            prompt: stepDef.prompt,
-            step: stepId,
-            clientInfo,
-          }),
+          body: JSON.stringify({ prompt: stepDef.prompt, step: stepId, clientInfo }),
         }
       );
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || "Errore nella generazione");
       }
-
       const data = await response.json();
-      
       const bothFailed = data.gemini?.error && data.gpt?.error;
       if (bothFailed) {
         const isQuota = data.gemini.status === 402 || data.gemini.status === 429 || data.gpt.status === 402 || data.gpt.status === 429;
         if (isQuota) {
           toast.error("API key esaurite o non valide. Controlla le impostazioni API.", {
-            action: onOpenApiSettings ? {
-              label: "Impostazioni API",
-              onClick: () => onOpenApiSettings(),
-            } : undefined,
+            action: onOpenApiSettings ? { label: "Impostazioni API", onClick: () => onOpenApiSettings() } : undefined,
             duration: 8000,
           });
         }
       }
-      
-      return {
-        step: stepId,
-        gemini: data.gemini,
-        gpt: data.gpt,
-        merged: data.merged,
-      };
+      return { step: stepId, gemini: data.gemini, gpt: data.gpt, merged: data.merged };
     } catch {
       return null;
     }
-  }, [clientInfo]);
+  }, [clientInfo, onOpenApiSettings]);
 
   const generateStep = async () => {
-    // If batch generation is running, queue this step instead
     if (isGeneratingAll) {
       setRegenerateQueue((prev) => {
         if (prev.includes(currentStep)) return prev;
@@ -95,7 +86,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
       });
       return;
     }
-
     setLoading(true);
     try {
       const result = await generateSingleStep(currentStep);
@@ -115,22 +105,17 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
     setCurrentStep(1);
     setIsGeneratingAll(true);
     abortRef.current = false;
-
     for (let i = 0; i < STRATEGY_STEPS.length; i++) {
       if (abortRef.current) break;
-
       const step = STRATEGY_STEPS[i];
       setGeneratingStepId(step.id);
-
       const result = await generateSingleStep(step.id);
-
       if (result) {
         setResults((prev) => ({ ...prev, [step.id]: result }));
       } else {
         toast.error(`Errore nello step ${step.id}: ${step.shortTitle}`);
       }
     }
-
     // Process queued regenerations
     while (!abortRef.current) {
       let nextInQueue: number | undefined;
@@ -139,9 +124,7 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
         nextInQueue = prev[0];
         return prev.slice(1);
       });
-      // Need to wait a tick to get the value
       await new Promise((r) => setTimeout(r, 50));
-      // Re-read queue
       let queueSnapshot: number[] = [];
       setRegenerateQueue((prev) => { queueSnapshot = prev; return prev; });
       if (!nextInQueue && queueSnapshot.length === 0) break;
@@ -154,7 +137,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
         }
       }
     }
-
     setIsGeneratingAll(false);
     setGeneratingStepId(null);
     setRegenerateQueue([]);
@@ -168,6 +150,47 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
     }));
   };
 
+  const handleExportPptx = async () => {
+    setExporting(true);
+    try {
+      await exportToPptx(clientInfo, results);
+      toast.success("PowerPoint scaricato!");
+    } catch (err: any) {
+      toast.error("Errore nell'export: " + (err.message || "Sconosciuto"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSaveProject = async () => {
+    setSaving(true);
+    try {
+      // Check for duplicates if it's a new project
+      if (!projectId) {
+        const category = clientInfo.strategyType === "seo" ? "sito" : "social";
+        const existing = await checkDuplicateProject(clientInfo.name, category);
+        if (existing) {
+          const overwrite = confirm(
+            `Esiste già un progetto "${clientInfo.name}" nella categoria "${category}". Vuoi sovrascriverlo?`
+          );
+          if (overwrite) {
+            const id = await saveProject(clientInfo, results, logoUrl, existing.id);
+            if (id) setProjectId(id);
+            setSaving(false);
+            return;
+          } else {
+            setSaving(false);
+            return;
+          }
+        }
+      }
+      const id = await saveProject(clientInfo, results, logoUrl, projectId || undefined);
+      if (id) setProjectId(id);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Idle mode
   if (mode === "idle" && completedSteps.length === 0) {
     return (
@@ -179,7 +202,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
               <span className="font-semibold text-foreground">{clientInfo.name}</span> · {clientInfo.sector} · {clientInfo.location}
             </p>
           </div>
-
           <div className="grid gap-4">
             <Card
               className="cursor-pointer border-2 border-accent/20 hover:border-accent/50 hover:shadow-lg transition-all group"
@@ -197,10 +219,9 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
                 </div>
               </CardContent>
             </Card>
-
             <Card
               className="cursor-pointer border-2 border-border hover:border-accent/30 hover:shadow-md transition-all group"
-              onClick={() => { setMode("review"); }}
+              onClick={() => setMode("review")}
             >
               <CardContent className="p-6 flex items-center gap-5">
                 <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -215,7 +236,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
               </CardContent>
             </Card>
           </div>
-
           <div className="text-center">
             <Button variant="ghost" size="sm" onClick={onReset} className="text-muted-foreground gap-2">
               <RotateCcw className="h-4 w-4" /> Cambia cliente
@@ -267,26 +287,25 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
             <button
               onClick={() => setReviewView("slide")}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                reviewView === "slide"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                reviewView === "slide" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Presentation className="h-3.5 w-3.5" />
-              Slide
+              <Presentation className="h-3.5 w-3.5" /> Slide
             </button>
             <button
               onClick={() => setReviewView("compare")}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                reviewView === "compare"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                reviewView === "compare" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              Confronta
+              <Sparkles className="h-3.5 w-3.5" /> Confronta
             </button>
           </div>
+          {onOpenProjects && (
+            <Button variant="ghost" size="sm" onClick={onOpenProjects} className="text-muted-foreground gap-1.5">
+              <FolderOpen className="h-3.5 w-3.5" /> Progetti
+            </Button>
+          )}
           {onOpenApiSettings && (
             <Button variant="ghost" size="sm" onClick={onOpenApiSettings} className="text-muted-foreground gap-1.5">
               <Settings className="h-3.5 w-3.5" /> API
@@ -323,7 +342,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
               </div>
               <h1 className="font-serif text-3xl text-foreground">{currentStepDef.title}</h1>
             </header>
-
             {!currentResult && !loading && (
               <Card className="shadow-card max-w-lg">
                 <CardContent className="p-8 text-center">
@@ -334,7 +352,6 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
                 </CardContent>
               </Card>
             )}
-
             {(currentResult || loading) && (
               <DualComparison
                 gemini={currentResult?.gemini || { content: "", model: "gemini" }}
@@ -366,17 +383,22 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings, initial
                 {isGeneratingAll ? "Metti in coda" : "Rigenera"}
               </Button>
               {!isGeneratingAll && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { startBatchGeneration(); }}
-                  disabled={loading}
-                  className="gap-1.5"
-                >
-                  <Rocket className="h-3.5 w-3.5" />
-                  Rigenera tutti gli step
+                <Button variant="outline" size="sm" onClick={startBatchGeneration} disabled={loading} className="gap-1.5">
+                  <Rocket className="h-3.5 w-3.5" /> Rigenera tutti gli step
                 </Button>
               )}
+            </>
+          )}
+          {completedSteps.length > 0 && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleSaveProject} disabled={saving} className="gap-1.5">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Salva
+              </Button>
+              <Button variant="gold" size="sm" onClick={handleExportPptx} disabled={exporting} className="gap-1.5">
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                PowerPoint
+              </Button>
             </>
           )}
         </div>

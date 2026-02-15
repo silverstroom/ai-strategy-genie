@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { ClientInfo } from "@/lib/strategy-steps";
+import { ClientInfo, StepResult } from "@/lib/strategy-steps";
 import { ClientForm } from "@/components/ClientForm";
 import { StrategyWizard } from "@/components/StrategyWizard";
 import { ApiSettings } from "@/components/ApiSettings";
 import { LoginForm } from "@/components/LoginForm";
-import { Sparkles, Zap, ArrowRight, Settings, LogOut } from "lucide-react";
+import { ProjectsPanel } from "@/components/ProjectsPanel";
+import { Sparkles, Zap, ArrowRight, Settings, LogOut, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -12,6 +13,9 @@ const Index = () => {
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [showProjects, setShowProjects] = useState(false);
+  const [initialResults, setInitialResults] = useState<Record<number, StepResult> | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const { isLoggedIn, logout } = useAuth();
 
   if (!isLoggedIn) {
@@ -21,6 +25,15 @@ const Index = () => {
   const handleClientSubmit = (info: ClientInfo, logo?: string) => {
     setClientInfo(info);
     if (logo) setLogoUrl(logo);
+    setInitialResults(null);
+    setCurrentProjectId(null);
+  };
+
+  const handleLoadProject = (info: ClientInfo, results: Record<number, StepResult>, logo: string | null, projectId: string) => {
+    setClientInfo(info);
+    setLogoUrl(logo);
+    setInitialResults(results);
+    setCurrentProjectId(projectId);
   };
 
   if (clientInfo) {
@@ -28,19 +41,35 @@ const Index = () => {
       <>
         <StrategyWizard
           clientInfo={clientInfo}
-          onReset={() => { setClientInfo(null); setLogoUrl(null); }}
+          onReset={() => { setClientInfo(null); setLogoUrl(null); setInitialResults(null); setCurrentProjectId(null); }}
           onOpenApiSettings={() => setShowApiSettings(true)}
           initialLogoUrl={logoUrl}
+          initialResults={initialResults}
+          existingProjectId={currentProjectId}
+          onOpenProjects={() => setShowProjects(true)}
         />
         {showApiSettings && <ApiSettings onClose={() => setShowApiSettings(false)} />}
+        <ProjectsPanel
+          open={showProjects}
+          onClose={() => setShowProjects(false)}
+          onLoadProject={handleLoadProject}
+        />
       </>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Settings & Logout buttons */}
+      {/* Top buttons */}
       <div className="fixed top-4 right-4 z-40 flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowProjects(true)}
+          className="gap-1.5 bg-card/80 backdrop-blur-sm"
+        >
+          <FolderOpen className="h-3.5 w-3.5" /> Progetti
+        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -60,6 +89,11 @@ const Index = () => {
       </div>
 
       {showApiSettings && <ApiSettings onClose={() => setShowApiSettings(false)} />}
+      <ProjectsPanel
+        open={showProjects}
+        onClose={() => setShowProjects(false)}
+        onLoadProject={handleLoadProject}
+      />
 
       {/* Hero */}
       <header className="gradient-navy py-20 px-6">
@@ -92,21 +126,9 @@ const Index = () => {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
             {[
-              {
-                icon: "📋",
-                title: "Inserisci i dati",
-                desc: "Compila le informazioni del cliente e il tipo di strategia desiderata.",
-              },
-              {
-                icon: "🤖",
-                title: "Dual AI Generation",
-                desc: "Gemini e ChatGPT generano ogni sezione in parallelo, dal posizionamento ai Reel.",
-              },
-              {
-                icon: "⚖️",
-                title: "Confronta e Seleziona",
-                desc: "Scegli il risultato migliore per ogni step e costruisci il deck perfetto.",
-              },
+              { icon: "📋", title: "Inserisci i dati", desc: "Compila le informazioni del cliente e il tipo di strategia desiderata." },
+              { icon: "🤖", title: "Dual AI Generation", desc: "Gemini e ChatGPT generano ogni sezione in parallelo, dal posizionamento ai Reel." },
+              { icon: "⚖️", title: "Confronta e Seleziona", desc: "Scegli il risultato migliore per ogni step e costruisci il deck perfetto." },
             ].map((item, i) => (
               <div key={i} className="text-center">
                 <div className="text-4xl mb-4">{item.icon}</div>

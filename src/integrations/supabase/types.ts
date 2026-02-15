@@ -35,6 +35,69 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          category: string
+          client_description: string | null
+          client_facebook: string | null
+          client_instagram: string | null
+          client_linkedin: string | null
+          client_location: string | null
+          client_name: string
+          client_sector: string
+          client_social_links: string | null
+          client_tiktok: string | null
+          client_website: string | null
+          client_youtube: string | null
+          created_at: string
+          id: string
+          logo_url: string | null
+          results: Json
+          strategy_type: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          client_description?: string | null
+          client_facebook?: string | null
+          client_instagram?: string | null
+          client_linkedin?: string | null
+          client_location?: string | null
+          client_name: string
+          client_sector: string
+          client_social_links?: string | null
+          client_tiktok?: string | null
+          client_website?: string | null
+          client_youtube?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          results?: Json
+          strategy_type?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          client_description?: string | null
+          client_facebook?: string | null
+          client_instagram?: string | null
+          client_linkedin?: string | null
+          client_location?: string | null
+          client_name?: string
+          client_sector?: string
+          client_social_links?: string | null
+          client_tiktok?: string | null
+          client_website?: string | null
+          client_youtube?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          results?: Json
+          strategy_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
