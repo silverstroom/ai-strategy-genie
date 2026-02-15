@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Loader2, Copy, Check, Upload, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 
 interface SlidePreviewProps {
@@ -17,7 +17,6 @@ interface SlidePreviewProps {
   onRegenerate?: () => void;
 }
 
-// Strip any HTML tags from AI output
 const sanitizeContent = (text: string): string => {
   return text.replace(/<\/?[a-zA-Z][^>]*>/g, '');
 };
@@ -31,7 +30,6 @@ const extractColors = (content: string): { hex: string; name: string; usage: str
   for (const line of lines) {
     const match = line.match(hexRegex);
     if (match) {
-      // Try to extract a name from the line
       const nameMatch = line.match(/:\s*#[0-9A-Fa-f]{6}\s*[–\-—]\s*(.+)/i) || 
                          line.match(/:\s*#[0-9A-Fa-f]{6}\s*\((.+?)\)/i) ||
                          line.match(/:\s*#[0-9A-Fa-f]{6}\s+(.+)/i);
@@ -46,6 +44,104 @@ const extractColors = (content: string): { hex: string; name: string; usage: str
   return colors;
 };
 
+// Extract font names from content for step 9
+const extractFonts = (content: string): { name: string; type: string }[] => {
+  const fonts: { name: string; type: string }[] = [];
+  const seen = new Set<string>();
+  
+  // Match patterns like "**Font Titolo:** Playfair Display" or "Font Titolo: Playfair Display"
+  const patterns = [
+    /\*\*Font\s+(?:Titolo|Title|Heading|Display)[:\s]*\*\*[:\s]*([A-Z][a-zA-Z\s]+?)(?:\n|$|\.|\,|\s*[-–—])/gi,
+    /\*\*Font\s+(?:Corpo|Body|Testo|Text|Paragrafo)[:\s]*\*\*[:\s]*([A-Z][a-zA-Z\s]+?)(?:\n|$|\.|\,|\s*[-–—])/gi,
+    /Font\s+(?:Titolo|Title|Heading)[:\s]+([A-Z][a-zA-Z\s]+?)(?:\n|$|\.|\,|\s*[-–—])/gi,
+    /Font\s+(?:Corpo|Body|Testo|Text)[:\s]+([A-Z][a-zA-Z\s]+?)(?:\n|$|\.|\,|\s*[-–—])/gi,
+  ];
+  
+  const typeMap: Record<number, string> = { 0: "titolo", 1: "corpo", 2: "titolo", 3: "corpo" };
+  
+  patterns.forEach((pattern, idx) => {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const fontName = match[1].trim();
+      if (fontName.length > 2 && fontName.length < 40 && !seen.has(fontName.toLowerCase())) {
+        seen.add(fontName.toLowerCase());
+        fonts.push({ name: fontName, type: typeMap[idx] });
+      }
+    }
+  });
+  
+  // Also try to match standalone font names mentioned with Google Fonts context
+  const googleFontPattern = /(?:Google\s+Fonts?[:\s]*)?(?:\*\*)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)(?:\*\*)?/g;
+  const knownFonts = [
+    "Playfair Display", "Montserrat", "Roboto", "Open Sans", "Lato", "Poppins",
+    "Raleway", "Oswald", "Merriweather", "Nunito", "Source Sans Pro", "PT Sans",
+    "Ubuntu", "Rubik", "Work Sans", "Inter", "DM Sans", "Outfit", "Manrope",
+    "Cormorant Garamond", "Libre Baskerville", "Crimson Text", "EB Garamond",
+    "Josefin Sans", "Quicksand", "Bitter", "Archivo", "Space Grotesk", "Sora",
+    "Plus Jakarta Sans", "Cabin", "Karla", "Fira Sans", "Barlow", "Mulish",
+    "Noto Sans", "Bebas Neue", "Dancing Script", "Pacifico", "Great Vibes",
+    "Abril Fatface", "Righteous", "Fredoka One", "Lobster", "Comfortaa",
+  ];
+  
+  for (const font of knownFonts) {
+    if (content.includes(font) && !seen.has(font.toLowerCase())) {
+      seen.add(font.toLowerCase());
+      fonts.push({ name: font, type: "generico" });
+    }
+  }
+  
+  return fonts;
+};
+
+// Load Google Font dynamically
+const loadGoogleFont = (fontName: string) => {
+  const link = document.createElement("link");
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;600;700&display=swap`;
+  link.rel = "stylesheet";
+  // Check if already loaded
+  const existing = document.querySelector(`link[href="${link.href}"]`);
+  if (!existing) {
+    document.head.appendChild(link);
+  }
+};
+
+// Inline color swatch component for markdown rendering
+const InlineColorSwatch = ({ hex }: { hex: string }) => (
+  <span
+    className="inline-block w-4 h-4 rounded border border-border align-middle mx-1 cursor-pointer hover:scale-125 transition-transform"
+    style={{ backgroundColor: hex }}
+    title={`Clicca per copiare ${hex}`}
+    onClick={(e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(hex);
+      toast.success(`${hex} copiato!`);
+    }}
+  />
+);
+
+// Process text children to add inline color swatches
+const processTextWithColors = (text: string): (string | JSX.Element)[] => {
+  const hexRegex = /#([0-9A-Fa-f]{6})\b/g;
+  const parts: (string | JSX.Element)[] = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = hexRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    parts.push(text.slice(match.index, match.index + 7));
+    parts.push(<InlineColorSwatch key={`color-${match.index}`} hex={match[0]} />);
+    lastIndex = match.index + 7;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : [text];
+};
+
 export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, onLogoUpload, onLogoRemove, onRegenerate }: SlidePreviewProps) => {
   const stepDef = STRATEGY_STEPS.find((s) => s.id === stepId)!;
   const rawContent = result?.merged?.content || "";
@@ -57,6 +153,16 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
     if (stepId === 8 && mergedContent) return extractColors(mergedContent);
     return [];
   }, [stepId, mergedContent]);
+
+  const fonts = useMemo(() => {
+    if (stepId === 9 && mergedContent) return extractFonts(mergedContent);
+    return [];
+  }, [stepId, mergedContent]);
+
+  // Load Google Fonts for step 9
+  useEffect(() => {
+    fonts.forEach((f) => loadGoogleFont(f.name));
+  }, [fonts]);
 
   const handleCopy = async () => {
     try {
@@ -83,6 +189,30 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
       toast.success("Logo caricato!");
     };
     reader.readAsDataURL(file);
+  };
+
+  // Check if content has hex colors (for inline rendering in step 8)
+  const shouldRenderInlineColors = stepId === 8;
+
+  // Custom text renderer that adds color swatches
+  const renderTextWithSwatches = (children: React.ReactNode): React.ReactNode => {
+    if (!shouldRenderInlineColors) return children;
+    if (typeof children === "string") {
+      const processed = processTextWithColors(children);
+      if (processed.length === 1 && typeof processed[0] === "string") return children;
+      return <>{processed}</>;
+    }
+    if (Array.isArray(children)) {
+      return children.map((child, i) => {
+        if (typeof child === "string") {
+          const processed = processTextWithColors(child);
+          if (processed.length === 1 && typeof processed[0] === "string") return child;
+          return <span key={i}>{processed}</span>;
+        }
+        return child;
+      });
+    }
+    return children;
   };
 
   return (
@@ -166,7 +296,6 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
                           <Upload className="h-3 w-3" /> Cambia logo
                         </Button>
                       </div>
-                      {/* Logo usage examples */}
                       <div className="hidden md:grid grid-cols-2 gap-3">
                         <div className="w-20 h-20 rounded-lg bg-card border border-border flex items-center justify-center p-2">
                           <img src={logoUrl} alt="Su sfondo chiaro" className="max-h-full max-w-full object-contain" />
@@ -229,6 +358,45 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
                 </div>
               )}
 
+              {/* Font preview for step 9 */}
+              {stepId === 9 && fonts.length > 0 && (
+                <div className="mb-8 p-6 rounded-xl border border-border bg-muted/30 space-y-6">
+                  <h3 className="font-serif text-lg text-foreground">Anteprima Font</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {fonts.map((font, i) => (
+                      <div key={i} className="p-5 rounded-xl bg-card border border-border">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-accent">
+                            {font.type === "titolo" ? "Font Titolo" : font.type === "corpo" ? "Font Corpo" : "Font"}
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                            {font.name}
+                          </span>
+                        </div>
+                        <p
+                          className="text-2xl mb-2 text-foreground"
+                          style={{ fontFamily: `'${font.name}', sans-serif` }}
+                        >
+                          {clientInfo.name}
+                        </p>
+                        <p
+                          className="text-base text-card-foreground leading-relaxed"
+                          style={{ fontFamily: `'${font.name}', sans-serif` }}
+                        >
+                          La qualità è il nostro impegno quotidiano. Ogni dettaglio conta per offrire un'esperienza unica.
+                        </p>
+                        <p
+                          className="text-sm text-muted-foreground mt-2"
+                          style={{ fontFamily: `'${font.name}', sans-serif` }}
+                        >
+                          ABCDEFGHIJKLMNOPQRSTUVWXYZ · abcdefghijklmnopqrstuvwxyz · 0123456789
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <article className="slide-content">
                 <ReactMarkdown
                   components={{
@@ -255,7 +423,7 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
                     ),
                     p: ({ children }) => (
                       <p className="text-card-foreground leading-relaxed mb-4 text-sm md:text-base">
-                        {children}
+                        {renderTextWithSwatches(children)}
                       </p>
                     ),
                     strong: ({ children }) => (
@@ -270,7 +438,7 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
                     li: ({ children }) => (
                       <li className="flex items-start gap-2.5 text-sm md:text-base text-card-foreground leading-relaxed">
                         <span className="mt-2 h-1.5 w-1.5 rounded-full bg-accent flex-shrink-0" />
-                        <span>{children}</span>
+                        <span>{renderTextWithSwatches(children)}</span>
                       </li>
                     ),
                     table: ({ children }) => (
@@ -288,7 +456,7 @@ export const SlidePreview = ({ stepId, result, clientInfo, isLoading, logoUrl, o
                     ),
                     td: ({ children }) => (
                       <td className="px-4 py-3 border-b border-border text-card-foreground align-top">
-                        {children}
+                        {renderTextWithSwatches(children)}
                       </td>
                     ),
                     tr: ({ children }) => (

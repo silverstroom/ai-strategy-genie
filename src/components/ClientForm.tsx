@@ -6,12 +6,12 @@ import { Label } from "@/components/ui/label";
 import { ClientInfo } from "@/lib/strategy-steps";
 import {
   Briefcase, MapPin, Globe, Wand2, Loader2, Search,
-  Facebook, Instagram, Linkedin, Youtube, Video,
+  Facebook, Instagram, Linkedin, Youtube, Video, Upload, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ClientFormProps {
-  onSubmit: (info: ClientInfo) => void;
+  onSubmit: (info: ClientInfo, logoUrl?: string) => void;
 }
 
 const ITALIAN_CITIES = [
@@ -59,7 +59,9 @@ export const ClientForm = ({ onSubmit }: ClientFormProps) => {
   const [aiLoading, setAiLoading] = useState(false);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const locationRef = useRef<HTMLDivElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -139,12 +141,26 @@ export const ClientForm = ({ onSubmit }: ClientFormProps) => {
     }
   };
 
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Seleziona un file immagine");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setLogoUrl(ev.target?.result as string);
+      toast.success("Logo caricato!");
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.sector || !form.description) return;
-    // Build socialLinks from individual fields
     const links = [form.facebook, form.instagram, form.linkedin, form.youtube, form.tiktok].filter(Boolean).join(", ");
-    onSubmit({ ...form, socialLinks: links || form.socialLinks });
+    onSubmit({ ...form, socialLinks: links || form.socialLinks }, logoUrl || undefined);
   };
 
   const set = (key: keyof ClientInfo, value: string) => setForm({ ...form, [key]: value });
@@ -204,6 +220,76 @@ export const ClientForm = ({ onSubmit }: ClientFormProps) => {
             {aiLoading ? "Analizzo..." : "Compila con AI"}
           </Button>
         </div>
+      </div>
+
+      {/* Logo upload */}
+      <div className="space-y-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+          <Upload className="h-3.5 w-3.5" /> Logo del Cliente
+        </h3>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleLogoFileChange}
+        />
+        {logoUrl ? (
+          <div className="flex items-center gap-6 p-4 rounded-xl border border-accent/20 bg-accent/5">
+            <div className="relative group">
+              <img
+                src={logoUrl}
+                alt="Logo caricato"
+                className="h-20 w-auto max-w-[180px] object-contain rounded-lg border border-border bg-card p-2"
+              />
+              <button
+                type="button"
+                onClick={() => setLogoUrl(null)}
+                className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-foreground">Logo caricato</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Verrà usato come riferimento nell'analisi logo (Step 7).</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 gap-1.5 text-xs"
+                onClick={() => logoInputRef.current?.click()}
+              >
+                <Upload className="h-3 w-3" /> Cambia logo
+              </Button>
+            </div>
+            {/* Mini preview on light/dark bg */}
+            <div className="hidden md:grid grid-cols-2 gap-3">
+              <div className="w-16 h-16 rounded-lg bg-card border border-border flex items-center justify-center p-2">
+                <img src={logoUrl} alt="Sfondo chiaro" className="max-h-full max-w-full object-contain" />
+              </div>
+              <div className="w-16 h-16 rounded-lg bg-foreground border border-border flex items-center justify-center p-2">
+                <img src={logoUrl} alt="Sfondo scuro" className="max-h-full max-w-full object-contain brightness-0 invert" />
+              </div>
+              <span className="text-[9px] text-center text-muted-foreground">Chiaro</span>
+              <span className="text-[9px] text-center text-muted-foreground">Scuro</span>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => logoInputRef.current?.click()}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-accent/30 bg-accent/5 cursor-pointer hover:bg-accent/10 transition-colors"
+          >
+            <div className="h-12 w-12 rounded-xl bg-accent/20 flex items-center justify-center flex-shrink-0">
+              <Upload className="h-5 w-5 text-accent" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-foreground">Carica il logo del cliente</p>
+              <p className="text-xs text-muted-foreground">PNG, SVG o JPG — verrà usato per l'analisi nello Step 7</p>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* Info di base */}
