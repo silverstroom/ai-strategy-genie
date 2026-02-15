@@ -35,6 +35,8 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
   const generateSingleStep = useCallback(async (stepId: number): Promise<StepResult | null> => {
     const stepDef = STRATEGY_STEPS.find((s) => s.id === stepId)!;
     try {
+      const savedOpenaiKey = localStorage.getItem("openai_api_key") || undefined;
+      const savedGoogleKey = localStorage.getItem("google_ai_api_key") || undefined;
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dual-ai`,
         {
@@ -47,6 +49,8 @@ export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: Strat
             prompt: stepDef.prompt,
             step: stepId,
             clientInfo,
+            openaiKey: savedOpenaiKey,
+            googleKey: savedGoogleKey,
           }),
         }
       );
