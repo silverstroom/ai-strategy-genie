@@ -40,8 +40,12 @@ serve(async (req) => {
 
   try {
     const { prompt, step, clientInfo } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY non configurata");
+    if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY non configurata");
 
     const userPrompt = `
 Informazioni sul cliente:
@@ -59,54 +63,99 @@ ${clientInfo.tiktok ? `- TikTok: ${clientInfo.tiktok}` : ""}
 
 ${prompt}`;
 
-    const callModel = async (model: string) => {
-      const response = await fetch(
-        "https://ai.gateway.lovable.dev/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
+    // Call Gemini via Google AI API
+    const callGemini = async () => {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_AI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                { role: "user", parts: [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }] },
+              ],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 4096,
+              },
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error("Gemini error:", response.status, errText);
+          return { error: `Errore Gemini (${response.status})`, status: response.status };
+        }
+
+        const data = await response.json();
+        let content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        content = content.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+        
+        return {
+          content,
+          model: "gemini-2.5-pro",
+          usage: {
+            prompt_tokens: data.usageMetadata?.promptTokenCount || 0,
+            completion_tokens: data.usageMetadata?.candidatesTokenCount || 0,
+            total_tokens: data.usageMetadata?.totalTokenCount || 0,
           },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              { role: "user", content: userPrompt },
-            ],
-            stream: false,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          return { error: "Rate limit exceeded, riprova tra poco.", status: 429 };
-        }
-        if (response.status === 402) {
-          return { error: "Crediti esauriti. Aggiungi crediti nel workspace.", status: 402 };
-        }
-        const t = await response.text();
-        console.error(`${model} error:`, response.status, t);
-        return { error: `Errore dal modello ${model}`, status: response.status };
+        };
+      } catch (err) {
+        console.error("Gemini call failed:", err);
+        return { error: `Errore Gemini: ${err.message}`, status: 500 };
       }
-
-      const data = await response.json();
-      // Strip any HTML tags from the response
-      let content = data.choices?.[0]?.message?.content || "";
-      content = content.replace(/<\/?[a-zA-Z][^>]*>/g, "");
-      
-      return {
-        content,
-        model,
-        usage: data.usage,
-      };
     };
 
-    // Call both top-tier models in parallel
+    // Call GPT via OpenAI API
+    const callGPT = async () => {
+      try {
+        const response = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 4096,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error("GPT error:", response.status, errText);
+          return { error: `Errore GPT (${response.status})`, status: response.status };
+        }
+
+        const data = await response.json();
+        let content = data.choices?.[0]?.message?.content || "";
+        content = content.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+        
+        return {
+          content,
+          model: "gpt-4o",
+          usage: data.usage,
+        };
+      } catch (err) {
+        console.error("GPT call failed:", err);
+        return { error: `Errore GPT: ${err.message}`, status: 500 };
+      }
+    };
+
+    // Call both models in parallel
     const [geminiResult, gptResult] = await Promise.all([
-      callModel("google/gemini-2.5-pro"),
-      callModel("openai/gpt-5"),
+      callGemini(),
+      callGPT(),
     ]);
 
     // Auto-merge: take the best from both results
@@ -116,40 +165,36 @@ ${prompt}`;
 
     const availableAnalyses: string[] = [];
     if (geminiContent) availableAnalyses.push(`--- ANALISI A (Gemini) ---\n${geminiContent}`);
-    if (gptContent) availableAnalyses.push(`--- ANALISI B (GPT-5) ---\n${gptContent}`);
+    if (gptContent) availableAnalyses.push(`--- ANALISI B (GPT) ---\n${gptContent}`);
 
     if (availableAnalyses.length >= 2) {
       try {
+        // Use Gemini Flash for merge (cheaper/faster)
         const mergeResponse = await fetch(
-          "https://ai.gateway.lovable.dev/v1/chat/completions",
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_AI_API_KEY}`,
           {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
-              messages: [
-                { role: "system", content: MERGE_SYSTEM_PROMPT },
+              contents: [
                 {
                   role: "user",
-                  content: `Ecco le ${availableAnalyses.length} analisi da combinare per lo step "${prompt.slice(0, 100)}":
-
-${availableAnalyses.join("\n\n")}
-
-Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCHISCI. NON usare tag HTML, solo markdown puro.`,
+                  parts: [{
+                    text: `${MERGE_SYSTEM_PROMPT}\n\nEcco le ${availableAnalyses.length} analisi da combinare per lo step "${prompt.slice(0, 100)}":\n\n${availableAnalyses.join("\n\n")}\n\nCrea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCHISCI. NON usare tag HTML, solo markdown puro.`,
+                  }],
                 },
               ],
-              stream: false,
+              generationConfig: {
+                temperature: 0.5,
+                maxOutputTokens: 8192,
+              },
             }),
           }
         );
 
         if (mergeResponse.ok) {
           const mergeData = await mergeResponse.json();
-          let mergedContent = mergeData.choices?.[0]?.message?.content || "";
-          // Final sanitization: strip any remaining HTML tags
+          let mergedContent = mergeData.candidates?.[0]?.content?.parts?.[0]?.text || "";
           mergedContent = mergedContent.replace(/<\/?[a-zA-Z][^>]*>/g, "");
           
           merged = {
@@ -162,7 +207,7 @@ Crea l'output definitivo prendendo il meglio da tutte. NON sintetizzare, ARRICCH
       }
     }
 
-    // If merge failed, fallback
+    // Fallback
     if (!merged) {
       merged = {
         content: geminiContent || gptContent || "Errore nella generazione.",
