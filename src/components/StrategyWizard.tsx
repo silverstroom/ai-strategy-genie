@@ -60,6 +60,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
         step: stepId,
         gemini: data.gemini,
         gpt: data.gpt,
+        merged: data.merged,
       };
     } catch {
       return null;
@@ -334,7 +335,7 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
             stepId={currentStep}
             result={currentResult}
             clientInfo={clientInfo}
-            onSelect={selectResult}
+            isLoading={loading}
           />
         ) : (
           <div className="max-w-6xl mx-auto px-4">

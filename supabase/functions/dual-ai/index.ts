@@ -12,6 +12,19 @@ Struttura l'output in modo sintetico, d'impatto, con testi efficaci che definisc
 
 Rispondi SEMPRE in italiano. Usa un tono professionale ma diretto. Formatta l'output in markdown con titoli, tabelle e liste dove appropriato.`;
 
+const MERGE_SYSTEM_PROMPT = `Sei un editor strategico senior. Il tuo compito è creare un output UNICO e DEFINITIVO partendo da due analisi prodotte da due AI diverse (Gemini e ChatGPT).
+
+REGOLE FONDAMENTALI:
+1. NON fare una sintesi riduttiva. Devi PRENDERE IL MEGLIO da entrambe le analisi.
+2. Se un'analisi ha punti più approfonditi su un tema, usa quelli. Se l'altra ha insight unici, includili.
+3. L'output finale deve essere PIÙ RICCO di ciascuna delle due analisi singole, non più povero.
+4. Mantieni tabelle, elenchi puntati, struttura chiara.
+5. Usa un tono professionale e d'impatto, adatto a una presentazione.
+6. Formatta in markdown PERFETTO con titoli gerarchici (##, ###), tabelle, liste, bold per i concetti chiave.
+7. Rispondi SEMPRE in italiano.
+8. NON menzionare mai che stai facendo un merge o che ci sono due fonti. Il risultato deve sembrare un'unica analisi autorevole.
+9. Organizza il contenuto in modo logico e visivamente pulito, con sezioni ben separate.`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -30,7 +43,11 @@ Informazioni sul cliente:
 - Descrizione: ${clientInfo.description}
 - Tipo strategia: ${clientInfo.strategyType}
 ${clientInfo.website ? `- Sito web: ${clientInfo.website}` : ""}
-${clientInfo.socialLinks ? `- Link social: ${clientInfo.socialLinks}` : ""}
+${clientInfo.facebook ? `- Facebook: ${clientInfo.facebook}` : ""}
+${clientInfo.instagram ? `- Instagram: ${clientInfo.instagram}` : ""}
+${clientInfo.linkedin ? `- LinkedIn: ${clientInfo.linkedin}` : ""}
+${clientInfo.youtube ? `- YouTube: ${clientInfo.youtube}` : ""}
+${clientInfo.tiktok ? `- TikTok: ${clientInfo.tiktok}` : ""}
 
 ${prompt}`;
 
@@ -80,10 +97,68 @@ ${prompt}`;
       callModel("openai/gpt-5-mini"),
     ]);
 
+    // Auto-merge: take the best from both results
+    let merged = null;
+    const geminiContent = geminiResult.error ? "" : geminiResult.content;
+    const gptContent = gptResult.error ? "" : gptResult.content;
+
+    if (geminiContent && gptContent) {
+      try {
+        const mergeResponse = await fetch(
+          "https://ai.gateway.lovable.dev/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { role: "system", content: MERGE_SYSTEM_PROMPT },
+                {
+                  role: "user",
+                  content: `Ecco le due analisi da combinare per lo step "${prompt.slice(0, 100)}":
+
+--- ANALISI A ---
+${geminiContent}
+
+--- ANALISI B ---
+${gptContent}
+
+Crea l'output definitivo prendendo il meglio da entrambe. NON sintetizzare, ARRICCHISCI.`,
+                },
+              ],
+              stream: false,
+            }),
+          }
+        );
+
+        if (mergeResponse.ok) {
+          const mergeData = await mergeResponse.json();
+          merged = {
+            content: mergeData.choices?.[0]?.message?.content || "",
+            model: "merged",
+          };
+        }
+      } catch (mergeErr) {
+        console.error("Merge error:", mergeErr);
+      }
+    }
+
+    // If merge failed, fallback to the better of the two
+    if (!merged) {
+      merged = {
+        content: geminiContent || gptContent || "Errore nella generazione.",
+        model: "fallback",
+      };
+    }
+
     return new Response(
       JSON.stringify({
         gemini: geminiResult,
         gpt: gptResult,
+        merged,
         step,
       }),
       {
