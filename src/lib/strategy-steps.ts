@@ -6,6 +6,11 @@ export interface ClientInfo {
   strategyType: "social" | "seo" | "both";
   website?: string;
   socialLinks?: string;
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
+  youtube?: string;
+  tiktok?: string;
 }
 
 export interface StepDefinition {

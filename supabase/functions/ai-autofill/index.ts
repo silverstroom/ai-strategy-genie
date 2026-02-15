@@ -12,9 +12,13 @@ serve(async (req) => {
   }
 
   try {
-    const { query } = await req.json();
+    const { query, website } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    const prompt = website
+      ? `Ricerca informazioni sull'azienda "${query}" con sito web: ${website}`
+      : `Ricerca informazioni sull'azienda "${query}"`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -29,23 +33,43 @@ serve(async (req) => {
           messages: [
             {
               role: "system",
-              content: `Sei un assistente che ricerca informazioni sulle aziende italiane. Dato il nome di un'azienda (e opzionalmente un sito web o una località), restituisci un JSON con queste informazioni. Cerca di essere il più accurato possibile basandoti sulle tue conoscenze.
+              content: `Sei un assistente che ricerca informazioni sulle aziende italiane. Il tuo compito è trovare dati PRECISI e VERIFICABILI.
 
-Rispondi SOLO con un JSON valido, senza markdown o altro testo. Il JSON deve avere questa struttura:
+ISTRUZIONI CRITICHE PER LA LOCALITÀ:
+- Cerca la SEDE OPERATIVA REALE dell'azienda, non indovinare.
+- Controlla la Google Business Profile dell'azienda per trovare l'indirizzo esatto.
+- Controlla il footer del sito web, la pagina "contatti", "chi siamo", "dove siamo".
+- Se il sito ha indicazioni come via, cap, città, usa QUELLE informazioni.
+- Per le aziende calabresi, attenzione a distinguere: Lamezia Terme, Catanzaro, Cosenza, Reggio Calabria, Crotone, Vibo Valentia.
+- Formato località: "Città, Regione" (es. "Lamezia Terme, Calabria")
+
+ISTRUZIONI PER I SOCIAL:
+- Cerca TUTTI i profili social dell'azienda: Facebook, Instagram, LinkedIn, YouTube, TikTok.
+- Per Facebook cerca: facebook.com/nomeazienda o la pagina business.
+- Per Instagram cerca: instagram.com/nomeazienda
+- Per LinkedIn cerca: linkedin.com/company/nomeazienda
+- Per YouTube cerca il canale dell'azienda.
+- Per TikTok cerca: tiktok.com/@nomeazienda
+- Se un social NON esiste, lascia il campo come stringa vuota.
+- Inserisci gli URL COMPLETI dei profili trovati.
+
+Rispondi SOLO con un JSON valido, senza markdown o altro testo:
 {
   "sector": "settore dell'azienda",
-  "location": "città, regione",
+  "location": "città, regione (SEDE REALE verificata)",
   "description": "descrizione sintetica dell'attività (2-3 frasi)",
-  "website": "sito web se noto",
-  "socialLinks": "link social se noti, separati da virgola",
+  "website": "sito web ufficiale",
+  "facebook": "URL completo pagina Facebook o stringa vuota",
+  "instagram": "URL completo profilo Instagram o stringa vuota",
+  "linkedin": "URL completo pagina LinkedIn o stringa vuota",
+  "youtube": "URL completo canale YouTube o stringa vuota",
+  "tiktok": "URL completo profilo TikTok o stringa vuota",
   "strategyType": "social"
-}
-
-Se non conosci un campo, lascialo come stringa vuota. Il campo strategyType deve essere sempre "social".`,
+}`,
             },
             {
               role: "user",
-              content: query,
+              content: prompt,
             },
           ],
           stream: false,
@@ -77,15 +101,20 @@ Se non conosci un campo, lascialo come stringa vuota. Il campo strategyType deve
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
 
-    // Try to parse JSON from the response
-    let parsed = {};
+    let parsed: Record<string, string> = {};
     try {
-      // Remove markdown code blocks if present
       const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       parsed = JSON.parse(cleaned);
     } catch {
       console.error("Failed to parse AI response:", content);
       parsed = {};
+    }
+
+    // Build socialLinks string from individual fields for backward compat
+    const socialParts = [parsed.facebook, parsed.instagram, parsed.linkedin, parsed.youtube, parsed.tiktok]
+      .filter(Boolean);
+    if (socialParts.length > 0 && !parsed.socialLinks) {
+      parsed.socialLinks = socialParts.join(", ");
     }
 
     return new Response(JSON.stringify(parsed), {
