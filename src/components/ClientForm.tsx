@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,33 @@ interface ClientFormProps {
   onSubmit: (info: ClientInfo) => void;
 }
 
+const ITALIAN_CITIES = [
+  "Roma, Lazio","Milano, Lombardia","Napoli, Campania","Torino, Piemonte","Palermo, Sicilia",
+  "Genova, Liguria","Bologna, Emilia-Romagna","Firenze, Toscana","Bari, Puglia","Catania, Sicilia",
+  "Venezia, Veneto","Verona, Veneto","Messina, Sicilia","Padova, Veneto","Trieste, Friuli-Venezia Giulia",
+  "Brescia, Lombardia","Parma, Emilia-Romagna","Taranto, Puglia","Prato, Toscana","Modena, Emilia-Romagna",
+  "Reggio Calabria, Calabria","Reggio Emilia, Emilia-Romagna","Perugia, Umbria","Ravenna, Emilia-Romagna",
+  "Livorno, Toscana","Cagliari, Sardegna","Foggia, Puglia","Rimini, Emilia-Romagna","Salerno, Campania",
+  "Ferrara, Emilia-Romagna","Sassari, Sardegna","Latina, Lazio","Monza, Lombardia","Siracusa, Sicilia",
+  "Pescara, Abruzzo","Bergamo, Lombardia","Forlì, Emilia-Romagna","Trento, Trentino-Alto Adige",
+  "Vicenza, Veneto","Terni, Umbria","Bolzano, Trentino-Alto Adige","Novara, Piemonte",
+  "Piacenza, Emilia-Romagna","Ancona, Marche","Andria, Puglia","Arezzo, Toscana",
+  "Udine, Friuli-Venezia Giulia","Cesena, Emilia-Romagna","Lecce, Puglia","Pesaro, Marche",
+  "Barletta, Puglia","Alessandria, Piemonte","La Spezia, Liguria","Pistoia, Toscana",
+  "Catanzaro, Calabria","Brindisi, Puglia","Como, Lombardia","Treviso, Veneto","Varese, Lombardia",
+  "Cosenza, Calabria","Potenza, Basilicata","Crotone, Calabria","Vibo Valentia, Calabria",
+  "Lamezia Terme, Calabria","Matera, Basilicata","Avellino, Campania","Benevento, Campania",
+  "Caserta, Campania","Agrigento, Sicilia","Trapani, Sicilia","Ragusa, Sicilia","Enna, Sicilia",
+  "Caltanissetta, Sicilia","Campobasso, Molise","Isernia, Molise","L'Aquila, Abruzzo",
+  "Chieti, Abruzzo","Teramo, Abruzzo","Aosta, Valle d'Aosta","Nuoro, Sardegna","Oristano, Sardegna",
+  "Lucca, Toscana","Massa, Toscana","Grosseto, Toscana","Siena, Toscana","Pisa, Toscana",
+  "Mantova, Lombardia","Cremona, Lombardia","Lecco, Lombardia","Lodi, Lombardia","Pavia, Lombardia",
+  "Sondrio, Lombardia","Asti, Piemonte","Biella, Piemonte","Cuneo, Piemonte","Verbania, Piemonte",
+  "Vercelli, Piemonte","Imperia, Liguria","Savona, Liguria","Belluno, Veneto","Rovigo, Veneto",
+  "Gorizia, Friuli-Venezia Giulia","Pordenone, Friuli-Venezia Giulia","Fermo, Marche",
+  "Ascoli Piceno, Marche","Macerata, Marche","Frosinone, Lazio","Rieti, Lazio","Viterbo, Lazio",
+];
+
 export const ClientForm = ({ onSubmit }: ClientFormProps) => {
   const [form, setForm] = useState<ClientInfo>({
     name: "",
@@ -22,6 +49,36 @@ export const ClientForm = ({ onSubmit }: ClientFormProps) => {
     socialLinks: "",
   });
   const [aiLoading, setAiLoading] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const locationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleLocationChange = (value: string) => {
+    setForm({ ...form, location: value });
+    if (value.length >= 2) {
+      const lower = value.toLowerCase();
+      const matches = ITALIAN_CITIES.filter((c) => c.toLowerCase().includes(lower)).slice(0, 8);
+      setLocationSuggestions(matches);
+      setShowSuggestions(matches.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectLocation = (loc: string) => {
+    setForm({ ...form, location: loc });
+    setShowSuggestions(false);
+  };
 
   const handleAIAutofill = async () => {
     if (!form.name.trim()) {
@@ -122,7 +179,7 @@ export const ClientForm = ({ onSubmit }: ClientFormProps) => {
             required
           />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 relative" ref={locationRef}>
           <Label htmlFor="location" className="flex items-center gap-2 text-sm font-medium">
             <MapPin className="h-4 w-4 text-accent" />
             Località
@@ -130,9 +187,24 @@ export const ClientForm = ({ onSubmit }: ClientFormProps) => {
           <Input
             id="location"
             value={form.location}
-            onChange={(e) => setForm({ ...form, location: e.target.value })}
+            onChange={(e) => handleLocationChange(e.target.value)}
+            onFocus={() => form.location.length >= 2 && locationSuggestions.length > 0 && setShowSuggestions(true)}
             placeholder="Es. Catanzaro, Calabria"
+            autoComplete="off"
           />
+          {showSuggestions && (
+            <ul className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {locationSuggestions.map((loc) => (
+                <li
+                  key={loc}
+                  onClick={() => selectLocation(loc)}
+                  className="px-3 py-2 text-sm cursor-pointer hover:bg-accent/10 transition-colors"
+                >
+                  {loc}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="website" className="flex items-center gap-2 text-sm font-medium">
