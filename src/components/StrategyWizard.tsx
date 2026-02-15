@@ -5,18 +5,19 @@ import { SlidePreview } from "@/components/SlidePreview";
 import { DualComparison } from "@/components/DualComparison";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, Rocket, Presentation, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Play, RotateCcw, Loader2, Rocket, Presentation, Sparkles, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 interface StrategyWizardProps {
   clientInfo: ClientInfo;
   onReset: () => void;
+  onOpenApiSettings?: () => void;
 }
 
 type WizardMode = "idle" | "review";
 type ReviewView = "slide" | "compare";
 
-export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => {
+export const StrategyWizard = ({ clientInfo, onReset, onOpenApiSettings }: StrategyWizardProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [results, setResults] = useState<Record<number, StepResult>>({});
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,22 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
       }
 
       const data = await response.json();
+      
+      // Check if both AI models failed (API key issues)
+      const bothFailed = data.gemini?.error && data.gpt?.error;
+      if (bothFailed) {
+        const isQuota = data.gemini.status === 402 || data.gemini.status === 429 || data.gpt.status === 402 || data.gpt.status === 429;
+        if (isQuota) {
+          toast.error("API key esaurite o non valide. Controlla le impostazioni API.", {
+            action: onOpenApiSettings ? {
+              label: "Impostazioni API",
+              onClick: () => onOpenApiSettings(),
+            } : undefined,
+            duration: 8000,
+          });
+        }
+      }
+      
       return {
         step: stepId,
         gemini: data.gemini,
@@ -232,6 +249,11 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
               Confronta
             </button>
           </div>
+          {onOpenApiSettings && (
+            <Button variant="ghost" size="sm" onClick={onOpenApiSettings} className="text-muted-foreground gap-1.5">
+              <Settings className="h-3.5 w-3.5" /> API
+            </Button>
+          )}
         </div>
       </div>
 

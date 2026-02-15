@@ -2,17 +2,43 @@ import { useState } from "react";
 import { ClientInfo } from "@/lib/strategy-steps";
 import { ClientForm } from "@/components/ClientForm";
 import { StrategyWizard } from "@/components/StrategyWizard";
-import { Sparkles, Zap, ArrowRight } from "lucide-react";
+import { ApiSettings } from "@/components/ApiSettings";
+import { Sparkles, Zap, ArrowRight, Settings } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [showApiSettings, setShowApiSettings] = useState(false);
 
   if (clientInfo) {
-    return <StrategyWizard clientInfo={clientInfo} onReset={() => setClientInfo(null)} />;
+    return (
+      <>
+        <StrategyWizard
+          clientInfo={clientInfo}
+          onReset={() => setClientInfo(null)}
+          onOpenApiSettings={() => setShowApiSettings(true)}
+        />
+        {showApiSettings && <ApiSettings onClose={() => setShowApiSettings(false)} />}
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Settings button */}
+      <div className="fixed top-4 right-4 z-40">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowApiSettings(true)}
+          className="gap-1.5 bg-card/80 backdrop-blur-sm"
+        >
+          <Settings className="h-3.5 w-3.5" /> API
+        </Button>
+      </div>
+
+      {showApiSettings && <ApiSettings onClose={() => setShowApiSettings(false)} />}
+
       {/* Hero */}
       <header className="gradient-navy py-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
