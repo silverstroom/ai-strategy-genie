@@ -390,10 +390,22 @@ export const StrategyWizard = ({ clientInfo, onReset }: StrategyWizardProps) => 
       <div className="border-t border-border bg-card px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {currentResult && (
-            <Button variant="outline" size="sm" onClick={generateStep} disabled={loading} className="gap-1.5">
-              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              Rigenera
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={generateStep} disabled={loading} className="gap-1.5">
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                Rigenera
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { startBatchGeneration(); }}
+                disabled={loading}
+                className="gap-1.5"
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                Rigenera tutti gli step
+              </Button>
+            </>
           )}
         </div>
         <div className="flex items-center gap-3">
